@@ -1,0 +1,6 @@
+{
+  "name": "AsesmenQu",
+  "description": "Sistem Asesmen Formatif dan Sumatif Kurikulum Merdeka modern dengan kalkulator nilai sumatif otomatis dan deskripsi capaian kompetensi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
