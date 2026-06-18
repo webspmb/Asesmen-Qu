@@ -4176,7 +4176,7 @@ function hapusDataSiswa(nisn) {
             
             <h1 className="text-2xl font-black text-white tracking-tight uppercase">AsesmenQu App</h1>
             <p className="text-slate-400 text-xs mt-1 font-semibold px-4 leading-relaxed">
-              Sistem Asesmen Formatif dan Sumatif
+              KURIKULUM MERDEKA
             </p>
           </div>
 
