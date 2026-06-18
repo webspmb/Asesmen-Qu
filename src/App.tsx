@@ -46,10 +46,10 @@ interface StudentAssessment {
   nisn: string;
   kelas: string;
   mataPelajaran: string;
-  tp1: number;
-  tp2: number;
-  tp3: number;
-  sas: number;
+  tp1: number | '';
+  tp2: number | '';
+  tp3: number | '';
+  sas: number | '';
   nilaiAkhir: number;
   deskripsiTercapai: string;
   deskripsiPerluBimbingan: string;
@@ -1079,10 +1079,10 @@ export default function App() {
       nisn: mergedForm.nisn,
       kelas: mergedForm.kelas,
       mataPelajaran: mergedForm.mataPelajaran,
-      tp1: mergedForm.sumatif1 !== '' ? Number(mergedForm.sumatif1) : 0,
-      tp2: mergedForm.sumatif2 !== '' ? Number(mergedForm.sumatif2) : 0,
-      tp3: mergedForm.sumatif3 !== '' ? Number(mergedForm.sumatif3) : 0,
-      sas: mergedForm.nonTes !== '' || mergedForm.tes !== '' ? parseFloat((((Number(mergedForm.nonTes) || 0) + (Number(mergedForm.tes) || 0)) / ((mergedForm.nonTes !== '' ? 1 : 0) + (mergedForm.tes !== '' ? 1 : 0) || 1)).toFixed(1)) : 0,
+      tp1: mergedForm.sumatif1 !== '' ? Number(mergedForm.sumatif1) : '',
+      tp2: mergedForm.sumatif2 !== '' ? Number(mergedForm.sumatif2) : '',
+      tp3: mergedForm.sumatif3 !== '' ? Number(mergedForm.sumatif3) : '',
+      sas: mergedForm.nonTes !== '' || mergedForm.tes !== '' ? parseFloat((((Number(mergedForm.nonTes) || 0) + (Number(mergedForm.tes) || 0)) / ((mergedForm.nonTes !== '' ? 1 : 0) + (mergedForm.tes !== '' ? 1 : 0) || 1)).toFixed(1)) : '',
       nilaiAkhir: calcValues.nilaiAkhir,
       deskripsiTercapai: calcValues.descTercapai,
       deskripsiPerluBimbingan: calcValues.descPerluBimbingan,
@@ -1167,6 +1167,19 @@ export default function App() {
           }
         }
       });
+      
+      // Fallback to tp1, tp2, tp3 if no dynamic sumatif properties are entered
+      if (Object.keys(sMap).length === 0) {
+        if (studentData.tp1 !== undefined && studentData.tp1 !== null && studentData.tp1 !== '' && !isNaN(Number(studentData.tp1))) {
+          sMap['sumatif1'] = Number(studentData.tp1);
+        }
+        if (studentData.tp2 !== undefined && studentData.tp2 !== null && studentData.tp2 !== '' && !isNaN(Number(studentData.tp2))) {
+          sMap['sumatif2'] = Number(studentData.tp2);
+        }
+        if (studentData.tp3 !== undefined && studentData.tp3 !== null && studentData.tp3 !== '' && !isNaN(Number(studentData.tp3))) {
+          sMap['sumatif3'] = Number(studentData.tp3);
+        }
+      }
       
       const validSumatVals = Object.values(sMap);
       const calculatedAvgTP = validSumatVals.length > 0 
@@ -1263,9 +1276,9 @@ export default function App() {
         // Handle specific field updating
         if (numValue === '') {
           (updatedStudent as any)[field] = '';
-          if (field === 'sumatif1') updatedStudent.tp1 = 0;
-          if (field === 'sumatif2') updatedStudent.tp2 = 0;
-          if (field === 'sumatif3') updatedStudent.tp3 = 0;
+          if (field === 'sumatif1') updatedStudent.tp1 = '';
+          if (field === 'sumatif2') updatedStudent.tp2 = '';
+          if (field === 'sumatif3') updatedStudent.tp3 = '';
         } else {
           (updatedStudent as any)[field] = numValue;
           if (field === 'sumatif1') updatedStudent.tp1 = numValue;
@@ -2504,9 +2517,9 @@ export default function App() {
     let maxS = 0;
     filteredStudents.forEach(item => {
       // Periksa backward compatibility
-      if (item.tp1 !== undefined && item.tp1 !== null && item.tp1 !== 0) maxS = Math.max(maxS, 1);
-      if (item.tp2 !== undefined && item.tp2 !== null && item.tp2 !== 0) maxS = Math.max(maxS, 2);
-      if (item.tp3 !== undefined && item.tp3 !== null && item.tp3 !== 0) maxS = Math.max(maxS, 3);
+      if (item.tp1 !== undefined && item.tp1 !== null && item.tp1 !== 0 && item.tp1 !== '') maxS = Math.max(maxS, 1);
+      if (item.tp2 !== undefined && item.tp2 !== null && item.tp2 !== 0 && item.tp2 !== '') maxS = Math.max(maxS, 2);
+      if (item.tp3 !== undefined && item.tp3 !== null && item.tp3 !== 0 && item.tp3 !== '') maxS = Math.max(maxS, 3);
       
       // Periksa semua properti dinamis sumatif
       Object.keys(item).forEach(key => {
@@ -4176,7 +4189,7 @@ function hapusDataSiswa(nisn) {
             
             <h1 className="text-2xl font-black text-white tracking-tight uppercase">AsesmenQu App</h1>
             <p className="text-slate-400 text-xs mt-1 font-semibold px-4 leading-relaxed">
-              KURIKULUM MERDEKA
+              KURKULUM MERDEKA
             </p>
           </div>
 
