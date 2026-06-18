@@ -4223,7 +4223,7 @@ function hapusDataSiswa(nisn) {
               className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white py-3.5 rounded-xl font-bold transition duration-200 shadow-xl shadow-blue-500/10 flex items-center justify-center gap-2 text-xs mt-6 cursor-pointer tracking-wider"
             >
               <LogIn className="w-4.5 h-4.5" />
-              MASUK KE DASHBOARD GURU
+              Login
             </button>
           </form>
         </div>
