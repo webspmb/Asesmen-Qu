@@ -4171,7 +4171,7 @@ function hapusDataSiswa(nisn) {
             </div>
             
             <div className="flex items-center justify-center gap-1.5 mb-2.5 flex-wrap">
-              <span className="bg-red-600 text-white font-extrabold text-[9px] px-2.5 py-1.5 rounded uppercase tracking-wider shadow-md shadow-red-950/20">SEKOLAH DASAR (SD)</span>
+              <span className="bg-red-600 text-white font-extrabold text-[9px] px-2.5 py-1.5 rounded uppercase tracking-wider shadow-md shadow-red-950/20">SD NEGERI KAJULANGKO</span>
             </div>
             
             <h1 className="text-2xl font-black text-white tracking-tight uppercase">AsesmenQu App</h1>
