@@ -1386,7 +1386,7 @@ export default function App() {
       };
 
       // Sisipkan skrip dinamis ke dokumen
-      const SPREADSHEET_ID = "1Vn4jFXQLbbP7rGP_kkkoEd3Nyh7jqdvnCAMEVmRs92w";
+      const SPREADSHEET_ID = "18vE72GEaNyJh38SZ7m8PUPjkNbz10wghG3T9OiFJ5B0";
       const script = document.createElement('script');
       script.id = `gviz-jsonp-loader-${reqId}`;
       script.src = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=reqId:${reqId}&sheet=${encodeURIComponent(sheetName)}&t=${Date.now()}`;
@@ -2562,7 +2562,7 @@ Untuk membuat sistem ini berfungsi, buatlah Spreadsheet Google Baru yang memilik
  */
 
 // Silakan ubah ID Spreadsheet di bawah ini jika ingin menggunakan file spreadsheet lain
-var SPREADSHEET_ID = "1Vn4jFXQLbbP7rGP_kkkoEd3Nyh7jqdvnCAMEVmRs92w";
+var SPREADSHEET_ID = "18vE72GEaNyJh38SZ7m8PUPjkNbz10wghG3T9OiFJ5B0";
 
 function getSpreadsheet() {
   try {
