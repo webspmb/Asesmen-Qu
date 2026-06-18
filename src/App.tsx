@@ -172,7 +172,7 @@ export const DEFAULT_PRESET_TPS: TPDescription[] = [
 // 'VITE_GAS_URL' di Vercel, atau langsung mengubah string di bawah ini.
 export const GLOBAL_GAS_URL = (import.meta as any).env?.VITE_GAS_URL || 
   (typeof window !== 'undefined' ? window.localStorage.getItem('erapor_gas_url') : null) || 
-  "https://script.google.com/macros/s/AKfycbz-oMlQfezIm95l6tHsR7UDFWxgFDKQZzRrPQmiIhI5bNATZxyvKeKpKn2DRmM6UhGg/exec";
+  "https://script.google.com/macros/s/AKfycbzO-LT4LvVwu-DarOAWVywCgVF-RqBv0rRKf5jn_lA4C-5qOfME_UKZY7mEGuHYdzX7/exec";
 // ============================================================================
 
 /**
