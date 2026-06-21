@@ -34,6 +34,8 @@ import {
   Shield,
   Menu,
   ChevronLeft,
+  ChevronDown,
+  Camera,
   Edit,
   Upload,
   Download,
@@ -95,6 +97,7 @@ interface TeacherAccount {
   nama: string;
   role: 'Super Admin' | 'Admin' | 'Guru';
   jabatan?: string;
+  photo?: string;
 }
 
 // ============================================================================
@@ -345,6 +348,67 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('erapor_teachers', JSON.stringify(teachers));
   }, [teachers]);
+
+  // Profile & Avatar State
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState<boolean>(false);
+
+  const getInitials = (nameStr: string) => {
+    if (!nameStr) return 'A';
+    const cleanParts = nameStr.trim().split(/\s+/).filter(Boolean);
+    if (cleanParts.length === 0) return 'A';
+    if (cleanParts.length === 1) return cleanParts[0].slice(0, 2).toUpperCase();
+    return (cleanParts[0].charAt(0) + cleanParts[1].charAt(0)).toUpperCase();
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 1 * 1024 * 1024) {
+      triggerToast('Ukuran foto terlalu besar. Maksimal adalah 1 MB.', false);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Str = reader.result as string;
+      if (!currentUser) return;
+
+      const updatedUser = { ...currentUser, photo: base64Str };
+      setCurrentUser(updatedUser);
+      
+      setTeachers(prev => prev.map(t => t.username.toLowerCase() === currentUser.username.toLowerCase() ? { ...t, photo: base64Str } : t));
+
+      triggerToast('Menyimpan foto profil terbaru...', true);
+
+      if (gasUrl) {
+        try {
+          const formBody = new URLSearchParams();
+          formBody.append('action', 'simpanAkunGuru');
+          formBody.append('username', currentUser.username);
+          formBody.append('password', currentUser.password);
+          formBody.append('nama', currentUser.nama);
+          formBody.append('role', currentUser.role);
+          formBody.append('jabatan', currentUser.jabatan || '');
+          formBody.append('photo', base64Str);
+
+          await fetch(gasUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formBody
+          });
+          triggerToast('Foto profil berhasil diperbarui di Google Sheets!', true);
+        } catch (err: any) {
+          console.error(err);
+          triggerToast('Foto profil tersimpan secara lokal. Gagal sync ke Sheets: ' + err.toString(), false);
+        }
+      } else {
+        triggerToast('Foto profil tersimpan secara lokal!', true);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<'simulator' | 'database' | 'tp_settings' | 'gas_center' | 'admin' | 'settings_menu'>('simulator');
@@ -668,6 +732,57 @@ export default function App() {
     }
     return activeMapels.length > 0 ? activeMapels : DAFTAR_MAPEL;
   }, [tpConfigs, form.kelas, currentUser]);
+
+  const allowedTingkatsSettings = useMemo(() => {
+    if (!currentUser || currentUser.role === 'Admin' || currentUser.role === 'Super Admin') {
+      return ['Tingkat 1', 'Tingkat 2', 'Tingkat 3', 'Tingkat 4', 'Tingkat 5', 'Tingkat 6'];
+    }
+    const parsed = parseJabatan(currentUser.jabatan || '');
+    if (parsed.kelas && parsed.kelas.length > 0) {
+      const tingkats = parsed.kelas.map(k => getTingkatFromKelas(k));
+      const uniqueTingkats = Array.from(new Set(tingkats)).sort();
+      return uniqueTingkats.length > 0 ? uniqueTingkats : ['Tingkat 1'];
+    }
+    return ['Tingkat 1', 'Tingkat 2', 'Tingkat 3', 'Tingkat 4', 'Tingkat 5', 'Tingkat 6'];
+  }, [currentUser]);
+
+  const allowedMapelsSettings = useMemo(() => {
+    if (!currentUser || currentUser.role === 'Admin' || currentUser.role === 'Super Admin') {
+      return DAFTAR_MAPEL;
+    }
+    const parsed = parseJabatan(currentUser.jabatan || '');
+    if (parsed.mapels && parsed.mapels.length > 0) {
+      return parsed.mapels;
+    }
+    return DAFTAR_MAPEL;
+  }, [currentUser]);
+
+  const filteredTpConfigsDisplay = useMemo(() => {
+    if (!currentUser || currentUser.role === 'Admin' || currentUser.role === 'Super Admin') {
+      return tpConfigs;
+    }
+    const parsed = parseJabatan(currentUser.jabatan || '');
+    return tpConfigs.filter(config => {
+      const isMapelAllowed = parsed.mapels.includes(config.mapel);
+      const configTingkat = getTingkatFromKelas(config.kelas);
+      const isKelasAllowed = parsed.kelas.some(k => {
+        return k === config.kelas || getTingkatFromKelas(k) === configTingkat;
+      });
+      return isMapelAllowed && isKelasAllowed;
+    });
+  }, [tpConfigs, currentUser]);
+
+  // Handle auto-selected defaults for newMapelForm
+  useEffect(() => {
+    if (allowedTingkatsSettings.length > 0 && allowedMapelsSettings.length > 0) {
+      setNewMapelForm(prev => {
+        const nextKelas = allowedTingkatsSettings.includes(prev.kelas) ? prev.kelas : allowedTingkatsSettings[0];
+        const nextMapel = allowedMapelsSettings.includes(prev.mapel) ? prev.mapel : allowedMapelsSettings[0];
+        if (prev.kelas === nextKelas && prev.mapel === nextMapel) return prev;
+        return { ...prev, kelas: nextKelas, mapel: nextMapel };
+      });
+    }
+  }, [allowedTingkatsSettings, allowedMapelsSettings]);
 
   // Handle auto-selected defaults when classesToOffer loads
   useEffect(() => {
@@ -1976,10 +2091,17 @@ export default function App() {
             password: String(row.password || '').trim(),
             nama: String(row.nama || '').trim(),
             role: String(row.role || 'Guru').trim() as 'Admin' | 'Guru',
-            jabatan: String(row.jabatan || '').trim()
+            jabatan: String(row.jabatan || '').trim(),
+            photo: row.photo ? String(row.photo).trim() : undefined
           })).filter((x: any) => x.username && x.password);
 
           setTeachers(list);
+          if (currentUser) {
+            const matches = list.find(t => t.username.toLowerCase() === currentUser.username.toLowerCase());
+            if (matches && matches.photo !== currentUser.photo) {
+              setCurrentUser(prev => prev ? { ...prev, photo: matches.photo } : null);
+            }
+          }
           if (!silent) {
             triggerToast(`Berhasil sinkronisasi! Memuat ${list.length} akun guru dari Google Sheets via GAS.`, true);
           }
@@ -2003,12 +2125,19 @@ export default function App() {
             password: cells[1] && cells[1].v !== null ? String(cells[1].v).trim() : '',
             nama: cells[2] && cells[2].v !== null ? String(cells[2].v).trim() : '',
             role: cells[3] && cells[3].v !== null ? (String(cells[3].v).trim() as 'Admin' | 'Guru') : 'Guru',
-            jabatan: cells[4] && cells[4].v !== null ? String(cells[4].v).trim() : ''
+            jabatan: cells[4] && cells[4].v !== null ? String(cells[4].v).trim() : '',
+            photo: cells[5] && cells[5].v !== null ? String(cells[5].v).trim() : undefined
           };
         }).filter((x: TeacherAccount) => x.username && x.password);
 
         if (list.length > 0) {
           setTeachers(list);
+          if (currentUser) {
+            const matches = list.find(t => t.username.toLowerCase() === currentUser.username.toLowerCase());
+            if (matches && matches.photo !== currentUser.photo) {
+              setCurrentUser(prev => prev ? { ...prev, photo: matches.photo } : null);
+            }
+          }
           if (!silent) {
             triggerToast(`Berhasil sinkronisasi! Memuat ${list.length} akun guru via JSONP.`, true);
           }
@@ -3268,8 +3397,8 @@ function handleGetAkunGuru() {
     var sheet = getSpreadsheet().getSheetByName('AkunGuru');
     if (!sheet) {
       sheet = getSpreadsheet().insertSheet('AkunGuru');
-      sheet.appendRow(['Username', 'Password', 'Nama', 'Role', 'Jabatan']);
-      sheet.appendRow(['admin', 'admin', 'Kepala Sekolah / Admin', 'Admin', 'Kepala Sekolah / Admin']);
+      sheet.appendRow(['Username', 'Password', 'Nama', 'Role', 'Jabatan', 'Photo']);
+      sheet.appendRow(['admin', 'admin', 'Kepala Sekolah / Admin', 'Admin', 'Kepala Sekolah / Admin', '']);
     }
     
     var rows = sheet.getDataRange().getValues();
@@ -3281,7 +3410,8 @@ function handleGetAkunGuru() {
         password: String(rows[i][1]),
         nama: String(rows[i][2]),
         role: String(rows[i][3] || 'Guru'),
-        jabatan: String(rows[i][4] || '')
+        jabatan: String(rows[i][4] || ''),
+        photo: String(rows[i][5] || '')
       });
     }
     
@@ -3306,8 +3436,8 @@ function simpanAkunGuru(data) {
     var sheet = getSpreadsheet().getSheetByName('AkunGuru');
     if (!sheet) {
       sheet = getSpreadsheet().insertSheet('AkunGuru');
-      sheet.appendRow(['Username', 'Password', 'Nama', 'Role', 'Jabatan']);
-      sheet.appendRow(['admin', 'admin', 'Kepala Sekolah / Admin', 'Admin', 'Kepala Sekolah / Admin']);
+      sheet.appendRow(['Username', 'Password', 'Nama', 'Role', 'Jabatan', 'Photo']);
+      sheet.appendRow(['admin', 'admin', 'Kepala Sekolah / Admin', 'Admin', 'Kepala Sekolah / Admin', '']);
     }
     
     var rows = sheet.getDataRange().getValues();
@@ -3324,11 +3454,12 @@ function simpanAkunGuru(data) {
       data.password,
       data.nama,
       data.role || 'Guru',
-      data.jabatan || ''
+      data.jabatan || '',
+      data.photo || ''
     ];
     
     if (foundIndex !== -1) {
-      sheet.getRange(foundIndex, 1, 1, 5).setValues([rowData]);
+      sheet.getRange(foundIndex, 1, 1, 6).setValues([rowData]);
     } else {
       sheet.appendRow(rowData);
     }
@@ -4293,7 +4424,7 @@ function hapusDataSiswa(nisn) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col text-slate-800 font-sans">
+    <div className="h-screen bg-slate-50 flex flex-col text-slate-800 font-sans overflow-hidden">
       
       {/* Toast Notification */}
       {showToast.show && (
@@ -4362,41 +4493,109 @@ function hapusDataSiswa(nisn) {
               Mode: Live AsesmenQu
             </div>
 
-            {/* Teacher Profile Info Badge */}
-            <div className="bg-slate-900/60 backdrop-blur border border-white/10 rounded-xl px-4 py-2 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-slate-800 text-amber-400 font-black flex items-center justify-center text-xs shadow-inner">
-                {currentUser?.nama?.charAt(0).toUpperCase() || 'A'}
-              </div>
-              <div className="text-left">
-                <div className="text-[11px] font-black tracking-tight text-white flex items-center gap-1.5 leading-none">
-                  <span>{currentUser?.nama || 'Kepala Sekolah'}</span>
-                  <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase leading-none ${
-                    currentUser?.role === 'Super Admin' ? 'bg-purple-650 text-white shadow shadow-purple-600/35 animate-pulse' :
-                    currentUser?.role === 'Admin' ? 'bg-red-500 text-white' : 'bg-blue-600 text-white'
-                  }`}>
-                    {currentUser?.role || 'Admin'}
-                  </span>
-                </div>
-                <div className="text-[9px] text-slate-400 font-medium mt-0.5 flex items-center gap-1">
-                  <span>@{currentUser?.username || 'admin'}</span>
-                  {currentUser?.jabatan && (
-                    <>
-                      <span className="text-slate-600">•</span>
-                      <span className="text-amber-300 font-bold">{currentUser.jabatan}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-              
-              {/* Logout Trigger button */}
+            {/* Teacher Profile Info Badge Dropdown */}
+            <div className="relative">
               <button
                 type="button"
-                onClick={handleLogout}
-                title="Keluar dari AsesmenQu"
-                className="ml-2 p-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-white rounded-lg transition border border-rose-900/40 self-center cursor-pointer"
+                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                className="bg-slate-900/60 hover:bg-slate-900/80 backdrop-blur border border-white/10 hover:border-amber-400/40 rounded-xl px-4 py-2 flex items-center gap-3 transition cursor-pointer select-none text-left"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <div className="w-8 h-8 rounded-full bg-slate-800 text-amber-400 font-black flex items-center justify-center text-xs shadow-inner overflow-hidden shrink-0 border border-slate-700/30">
+                  {currentUser?.photo ? (
+                    <img src={currentUser.photo} alt={currentUser.nama} className="w-full h-full object-cover" />
+                  ) : (
+                    getInitials(currentUser?.nama || '')
+                  )}
+                </div>
+                <div className="text-left hidden sm:block max-w-[150px]">
+                  <div className="text-[11px] font-black tracking-tight text-white flex items-center gap-1.5 leading-none">
+                    <span className="truncate">{currentUser?.nama || 'Kepala Sekolah'}</span>
+                    <span className={`text-[8px] font-extrabold px-1 py-0.5 rounded uppercase leading-none ${
+                      currentUser?.role === 'Super Admin' ? 'bg-purple-650 text-white animate-pulse' :
+                      currentUser?.role === 'Admin' ? 'bg-red-500 text-white' : 'bg-blue-600 text-white'
+                    }`}>
+                      {currentUser?.role || 'Admin'}
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-slate-400 font-medium mt-1 leading-none truncate">
+                    @{currentUser?.username || 'admin'} {currentUser?.jabatan ? `• ${currentUser.jabatan}` : ''}
+                  </div>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 ml-1 transition-transform duration-200 ${isProfileDropdownOpen ? 'rotate-180 text-amber-400' : ''}`} />
               </button>
+
+              {/* Dropdown Card */}
+              {isProfileDropdownOpen && (
+                <>
+                  {/* Backdrop path for clicking outside */}
+                  <div className="fixed inset-0 z-40 cursor-default" onClick={() => setIsProfileDropdownOpen(false)} />
+                  
+                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 py-4 px-4 z-50 text-slate-800">
+                    <div className="flex flex-col items-center text-center pb-3.5 border-b border-slate-100">
+                      {/* Interactive Avatar change */}
+                      <div className="relative group shrink-0 w-16 h-16 mb-2.5">
+                        <div className="w-full h-full rounded-full bg-blue-50 text-blue-800 font-black flex items-center justify-center text-lg border border-slate-200 shadow-sm overflow-hidden">
+                          {currentUser?.photo ? (
+                            <img src={currentUser.photo} alt={currentUser.nama} className="w-full h-full object-cover" />
+                          ) : (
+                            getInitials(currentUser?.nama || '')
+                          )}
+                        </div>
+                        
+                        {/* Camera upload overlay icon */}
+                        <label className="absolute inset-0 bg-slate-950/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition duration-200 cursor-pointer">
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={(e) => {
+                              handlePhotoUpload(e);
+                              setIsProfileDropdownOpen(false);
+                            }} 
+                          />
+                          <Camera className="w-4 h-4 text-amber-300 animate-pulse" />
+                        </label>
+                      </div>
+
+                      {/* Info label user */}
+                      <h4 className="text-xs font-black text-slate-900 leading-tight">{currentUser?.nama}</h4>
+                      <p className="text-[9px] text-slate-400 font-extrabold tracking-widest uppercase mt-0.5">{currentUser?.role}</p>
+                      
+                      <div className="mt-2 text-[10px] bg-amber-50 text-amber-900 font-bold px-2.5 py-1 rounded-lg border border-amber-100">
+                        @{currentUser?.username || 'admin'} {currentUser?.jabatan ? `• ${currentUser.jabatan}` : ''}
+                      </div>
+
+                      {/* Manual Photo file sync inside dropdown */}
+                      <label className="mt-3 text-[10px] font-extrabold text-blue-700 hover:text-blue-800 hover:underline cursor-pointer flex items-center gap-1">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => {
+                            handlePhotoUpload(e);
+                            setIsProfileDropdownOpen(false);
+                          }} 
+                        />
+                        <Camera className="w-3.5 h-3.5" /> Ganti Foto Profil
+                      </label>
+                    </div>
+
+                    <div className="pt-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsProfileDropdownOpen(false);
+                          handleLogout();
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2.5 hover:bg-rose-50 border border-slate-100 text-rose-600 hover:text-rose-700 font-extrabold text-xs rounded-xl shadow-inner transition cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Keluar dari Aplikasi
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -5592,12 +5791,9 @@ function hapusDataSiswa(nisn) {
                         className="w-full px-3 py-2.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-blue-500 font-medium text-slate-700 font-sans"
                         required
                       >
-                        <option value="Tingkat 1">Tingkat 1</option>
-                        <option value="Tingkat 2">Tingkat 2</option>
-                        <option value="Tingkat 3">Tingkat 3</option>
-                        <option value="Tingkat 4">Tingkat 4</option>
-                        <option value="Tingkat 5">Tingkat 5</option>
-                        <option value="Tingkat 6">Tingkat 6</option>
+                        {allowedTingkatsSettings.map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -5609,7 +5805,7 @@ function hapusDataSiswa(nisn) {
                         className="w-full px-3 py-2.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-blue-500 font-medium text-slate-700 font-sans"
                         required
                       >
-                        {DAFTAR_MAPEL.map(mapel => (
+                        {allowedMapelsSettings.map(mapel => (
                           <option key={mapel} value={mapel}>{mapel}</option>
                         ))}
                       </select>
@@ -5706,139 +5902,165 @@ function hapusDataSiswa(nisn) {
                 </form>
 
                 {/* Right side: Configs lists mapping */}
-                <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {tpConfigs.map((config, index) => (
-                    <div key={config.id} className="p-4 rounded-xl border border-slate-150/80 bg-slate-50 relative space-y-4">
-                      <div className="flex items-center justify-between border-b border-slate-200/50 pb-2">
-                        <div className="flex flex-col gap-1">
-                          <span className="bg-blue-900 text-white rounded px-2 py-0.5 font-bold text-[9px] uppercase tracking-wider w-max">
-                            {config.kelas}
-                          </span>
-                          <span className="font-extrabold text-xs text-slate-800 uppercase">
-                            {config.mapel}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {gasUrl && (
-                            <button
-                              type="button"
-                              onClick={() => handleSaveSingleTPConfig(config)}
-                              className="text-emerald-600 hover:text-emerald-800 p-1 rounded hover:bg-emerald-50 cursor-pointer transition font-semibold"
-                              title="Simpan perubahan draf ke Google Sheets"
-                            >
-                              <Save className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteMapel(config.id, config.mapel)}
-                            className="text-rose-600 hover:text-rose-800 p-1 rounded hover:bg-rose-50 cursor-pointer transition font-semibold"
-                            title="Hapus mata pelajaran ini"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Capaian TP 1 (Deskripsi)</label>
-                          <input 
-                            type="text" 
-                            value={config.tp1Desc}
-                            onChange={(e) => {
-                              const updated = [...tpConfigs];
-                              updated[index].tp1Desc = e.target.value;
-                              setTpConfigs(updated);
-                            }}
-                            className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Capaian TP 2 (Deskripsi)</label>
-                          <input 
-                            type="text" 
-                            value={config.tp2Desc}
-                            onChange={(e) => {
-                              const updated = [...tpConfigs];
-                              updated[index].tp2Desc = e.target.value;
-                              setTpConfigs(updated);
-                            }}
-                            className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Capaian TP 3 (Deskripsi)</label>
-                          <input 
-                            type="text" 
-                            value={config.tp3Desc}
-                            onChange={(e) => {
-                              const updated = [...tpConfigs];
-                              updated[index].tp3Desc = e.target.value;
-                              setTpConfigs(updated);
-                            }}
-                            className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white"
-                          />
-                        </div>
-
-                        {(config.extraTps || []).map((tp, extraIdx) => {
-                          const tpNum = extraIdx + 4;
-                          return (
-                            <div key={extraIdx} className="space-y-1 pt-1.5 border-t border-slate-200/50">
-                              <div className="flex items-center justify-between">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Capaian TP {tpNum} (Deskripsi)</label>
+                <div className="lg:col-span-8">
+                  {filteredTpConfigsDisplay.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-8 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                      <p className="text-slate-400 font-bold text-xs">Tidak ada KKTP/Materi TP yang sesuai dengan Mata Pelajaran & Kelas yang Anda ajar.</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Silakan tambahkan baru di form sebelah kiri atau hubungi Admin jika terdapat ketidaksesuaian pembagian tugas.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {filteredTpConfigsDisplay.map((config) => (
+                        <div key={config.id} className="p-4 rounded-xl border border-slate-150/80 bg-slate-50 relative space-y-4">
+                          <div className="flex items-center justify-between border-b border-slate-200/50 pb-2">
+                            <div className="flex flex-col gap-1">
+                              <span className="bg-blue-900 text-white rounded px-2 py-0.5 font-bold text-[9px] uppercase tracking-wider w-max">
+                                {config.kelas}
+                              </span>
+                              <span className="font-extrabold text-xs text-slate-800 uppercase">
+                                {config.mapel}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {gasUrl && (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    const updated = [...tpConfigs];
-                                    if (updated[index].extraTps) {
-                                      updated[index].extraTps!.splice(extraIdx, 1);
-                                      if (updated[index].extraTps!.length === 0) {
-                                        delete updated[index].extraTps;
-                                      }
-                                      setTpConfigs(updated);
-                                    }
-                                  }}
-                                  className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1 rounded transition cursor-pointer"
-                                  title="Hapus TP ini"
+                                  onClick={() => handleSaveSingleTPConfig(config)}
+                                  className="text-emerald-600 hover:text-emerald-800 p-1 rounded hover:bg-emerald-50 cursor-pointer transition font-semibold"
+                                  title="Simpan perubahan draf ke Google Sheets"
                                 >
-                                  <X className="w-3.5 h-3.5" />
+                                  <Save className="w-4 h-4" />
                                 </button>
-                              </div>
+                              )}
+                              <button
+                                type="button"
+                                  onClick={() => handleDeleteMapel(config.id, config.mapel)}
+                                className="text-rose-600 hover:text-rose-800 p-1 rounded hover:bg-rose-50 cursor-pointer transition font-semibold"
+                                title="Hapus mata pelajaran ini"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Capaian TP 1 (Deskripsi)</label>
                               <input 
                                 type="text" 
-                                value={tp}
+                                value={config.tp1Desc}
                                 onChange={(e) => {
-                                  const updated = [...tpConfigs];
-                                  if (!updated[index].extraTps) updated[index].extraTps = [];
-                                  updated[index].extraTps![extraIdx] = e.target.value;
+                                  const updated = tpConfigs.map(c => 
+                                    c.id === config.id ? { ...c, tp1Desc: e.target.value } : c
+                                  );
                                   setTpConfigs(updated);
                                 }}
                                 className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white"
                               />
                             </div>
-                          );
-                        })}
 
-                        <div className="pt-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = [...tpConfigs];
-                              if (!updated[index].extraTps) updated[index].extraTps = [];
-                              updated[index].extraTps!.push('');
-                              setTpConfigs(updated);
-                            }}
-                            className="flex items-center gap-1 text-[10px] font-extrabold text-blue-700 hover:text-blue-800 transition py-2 px-2.5 rounded bg-blue-50/50 hover:bg-blue-100 border border-dashed border-blue-200 cursor-pointer w-full justify-center uppercase"
-                          >
-                            <Plus className="w-3.5 h-3.5" /> Tambah Capaian TP
-                          </button>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Capaian TP 2 (Deskripsi)</label>
+                              <input 
+                                type="text" 
+                                value={config.tp2Desc}
+                                onChange={(e) => {
+                                  const updated = tpConfigs.map(c => 
+                                    c.id === config.id ? { ...c, tp2Desc: e.target.value } : c
+                                  );
+                                  setTpConfigs(updated);
+                                }}
+                                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Capaian TP 3 (Deskripsi)</label>
+                              <input 
+                                type="text" 
+                                value={config.tp3Desc}
+                                onChange={(e) => {
+                                  const updated = tpConfigs.map(c => 
+                                    c.id === config.id ? { ...c, tp3Desc: e.target.value } : c
+                                  );
+                                  setTpConfigs(updated);
+                                }}
+                                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white"
+                              />
+                            </div>
+
+                            {(config.extraTps || []).map((tp, extraIdx) => {
+                              const tpNum = extraIdx + 4;
+                              return (
+                                <div key={extraIdx} className="space-y-1 pt-1.5 border-t border-slate-200/50">
+                                  <div className="flex items-center justify-between">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Capaian TP {tpNum} (Deskripsi)</label>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updated = tpConfigs.map(c => {
+                                          if (c.id === config.id && c.extraTps) {
+                                            const nextExtra = [...c.extraTps];
+                                            nextExtra.splice(extraIdx, 1);
+                                            return { 
+                                              ...c, 
+                                              extraTps: nextExtra.length > 0 ? nextExtra : undefined 
+                                            };
+                                          }
+                                          return c;
+                                        });
+                                        setTpConfigs(updated);
+                                      }}
+                                      className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1 rounded transition cursor-pointer"
+                                      title="Hapus TP ini"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  <input 
+                                    type="text" 
+                                    value={tp}
+                                    onChange={(e) => {
+                                      const updated = tpConfigs.map(c => {
+                                        if (c.id === config.id) {
+                                          const nextExtra = c.extraTps ? [...c.extraTps] : [];
+                                          nextExtra[extraIdx] = e.target.value;
+                                          return { ...c, extraTps: nextExtra };
+                                        }
+                                        return c;
+                                      });
+                                      setTpConfigs(updated);
+                                    }}
+                                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white"
+                                  />
+                                </div>
+                              );
+                            })}
+
+                            <div className="pt-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = tpConfigs.map(c => {
+                                    if (c.id === config.id) {
+                                      const nextExtra = c.extraTps ? [...c.extraTps] : [];
+                                      nextExtra.push('');
+                                      return { ...c, extraTps: nextExtra };
+                                    }
+                                    return c;
+                                  });
+                                  setTpConfigs(updated);
+                                }}
+                                className="flex items-center gap-1 text-[10px] font-extrabold text-blue-700 hover:text-blue-800 transition py-2 px-2.5 rounded bg-blue-50/50 hover:bg-blue-100 border border-dashed border-blue-200 cursor-pointer w-full justify-center uppercase"
+                              >
+                                <Plus className="w-3.5 h-3.5" /> Tambah Capaian TP
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
 
               </div>
@@ -6601,20 +6823,20 @@ function hapusDataSiswa(nisn) {
         )}
 
           </main>
+
+          {/* Footer copyright */}
+          <footer className="bg-slate-900 text-slate-400 py-10 border-t border-slate-800 text-center text-xs mt-16 mt-auto">
+            <div className="max-w-7xl mx-auto px-4 space-y-2">
+              <p className="font-semibold text-slate-300">
+                &copy; 2026 AsesmenQu_App 
+              </p>
+              <p className="text-slate-500 font-medium">
+                Dikembangkan secara mandiri untuk mempermudah tugas administrasi Guru di seluruh Indonesia. FIDHAL TOUNA AI.
+              </p>
+            </div>
+          </footer>
         </div>
       </div>
-
-      {/* Footer copyright */}
-      <footer className="bg-slate-900 text-slate-400 py-10 border-t border-slate-800 text-center text-xs mt-16 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 space-y-2">
-          <p className="font-semibold text-slate-300">
-            &copy; 2026 AsesmenQu - Sistem Asesmen Formatif dan Sumatif.
-          </p>
-          <p className="text-slate-500 font-medium">
-            Dikembangkan secara mandiri untuk mempermudah tugas administrasi Guru di seluruh Indonesia. FIDHAL TOUNA AI.
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }
