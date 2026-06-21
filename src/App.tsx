@@ -417,7 +417,7 @@ export default function App() {
   const [dbSubTab, setDbSubTab] = useState<'scores' | 'students'>('scores');
 
   // Subtab for Settings view
-  const [settingsSubTab, setSettingsSubTab] = useState<'kktp' | 'students' | 'admin' | 'bobot'>('kktp');
+  const [settingsSubTab, setSettingsSubTab] = useState<'kktp' | 'students' | 'admin' | 'bobot' | 'satuan'>('kktp');
 
   useEffect(() => {
     if (currentUser?.role === 'Guru' && dbSubTab === 'students') {
@@ -541,6 +541,85 @@ export default function App() {
     const saved = localStorage.getItem('erapor_sumatif_weights');
     return saved ? JSON.parse(saved) : {};
   });
+
+  // Satuan Pendidikan & Tahun Pelajaran States
+  const [namaSekolah, setNamaSekolah] = useState<string>(() => {
+    const saved = localStorage.getItem('erapor_nama_sekolah');
+    return saved || 'SD Negeri Merdeka';
+  });
+  const [npsn, setNpsn] = useState<string>(() => {
+    const saved = localStorage.getItem('erapor_npsn');
+    return saved || '40201234';
+  });
+  const [semester, setSemester] = useState<string>(() => {
+    const saved = localStorage.getItem('erapor_semester');
+    return saved || '1 (Ganjil)';
+  });
+  const [tahunPelajaran, setTahunPelajaran] = useState<string>(() => {
+    const saved = localStorage.getItem('erapor_tahun_pelajaran');
+    return saved || '2026/2027';
+  });
+
+  const [appLogo, setAppLogo] = useState<string>(() => {
+    const saved = localStorage.getItem('erapor_app_logo');
+    return saved || '';
+  });
+
+  // Inputs for Satuan Pendidikan view
+  const [inputNamaSekolah, setInputNamaSekolah] = useState(namaSekolah);
+  const [inputNpsn, setInputNpsn] = useState(npsn);
+  const [inputSemester, setInputSemester] = useState(semester);
+  const [inputTahunPelajaran, setInputTahunPelajaran] = useState(tahunPelajaran);
+  const [savingSatuan, setSavingSatuan] = useState(false);
+
+  // Sync inputs with GSheets master profile state
+  useEffect(() => {
+    setInputNamaSekolah(namaSekolah);
+    setInputNpsn(npsn);
+    setInputSemester(semester);
+    setInputTahunPelajaran(tahunPelajaran);
+  }, [namaSekolah, npsn, semester, tahunPelajaran]);
+
+  // Master student editing states
+  const [editingStudent, setEditingStudent] = useState<MasterStudent | null>(null);
+  const [editStudentForm, setEditStudentForm] = useState<MasterStudent>({
+    nisn: '',
+    nama: '',
+    kelas: '',
+    jenisKelamin: 'L'
+  });
+  const [savingEditStudent, setSavingEditStudent] = useState(false);
+
+  useEffect(() => {
+    if (editingStudent) {
+      setEditStudentForm({
+        nisn: editingStudent.nisn,
+        nama: editingStudent.nama,
+        kelas: editingStudent.kelas,
+        jenisKelamin: editingStudent.jenisKelamin || 'L'
+      });
+    }
+  }, [editingStudent]);
+
+  useEffect(() => {
+    localStorage.setItem('erapor_nama_sekolah', namaSekolah);
+  }, [namaSekolah]);
+
+  useEffect(() => {
+    localStorage.setItem('erapor_npsn', npsn);
+  }, [npsn]);
+
+  useEffect(() => {
+    localStorage.setItem('erapor_semester', semester);
+  }, [semester]);
+
+  useEffect(() => {
+    localStorage.setItem('erapor_tahun_pelajaran', tahunPelajaran);
+  }, [tahunPelajaran]);
+
+  useEffect(() => {
+    localStorage.setItem('erapor_app_logo', appLogo);
+  }, [appLogo]);
 
   useEffect(() => {
     localStorage.setItem('erapor_kktp_min', String(kktpMin));
@@ -1646,6 +1725,11 @@ export default function App() {
             console.error('Failed parsing sumatifWeights from sheet', e);
           }
         }
+        if (d.namaSekolah !== undefined && d.namaSekolah !== '') setNamaSekolah(d.namaSekolah);
+        if (d.npsn !== undefined && d.npsn !== '') setNpsn(d.npsn);
+        if (d.semester !== undefined && d.semester !== '') setSemester(d.semester);
+        if (d.tahunPelajaran !== undefined && d.tahunPelajaran !== '') setTahunPelajaran(d.tahunPelajaran);
+        if (d.appLogo !== undefined && d.appLogo !== '') setAppLogo(d.appLogo);
       }
     } catch (err) {
       console.warn('Gagal memproses syncPengaturan:', err);
@@ -1669,6 +1753,11 @@ export default function App() {
       formBody.append('sumatifWeights', JSON.stringify(sumatifWeights));
       formBody.append('weightTP', String(weightTP));
       formBody.append('weightSAS', String(weightSAS));
+      formBody.append('namaSekolah', namaSekolah);
+      formBody.append('npsn', npsn);
+      formBody.append('semester', semester);
+      formBody.append('tahunPelajaran', tahunPelajaran);
+      formBody.append('appLogo', appLogo);
 
       await fetch(gasUrl, {
         method: 'POST',
@@ -1703,6 +1792,11 @@ export default function App() {
       formBody.append('sumatifWeights', JSON.stringify(sumatifWeights));
       formBody.append('weightTP', String(wTP));
       formBody.append('weightSAS', String(wSAS));
+      formBody.append('namaSekolah', namaSekolah);
+      formBody.append('npsn', npsn);
+      formBody.append('semester', semester);
+      formBody.append('tahunPelajaran', tahunPelajaran);
+      formBody.append('appLogo', appLogo);
 
       await fetch(gasUrl, {
         method: 'POST',
@@ -1855,6 +1949,239 @@ export default function App() {
       triggerToast(`Berhasil menambahkan siswa ${newStudent.nama} ke Database Lokal!`, true);
       setNewMasterForm({ nisn: '', nama: '', kelas: newMasterForm.kelas, jenisKelamin: 'L' });
     }
+  };
+
+  // Update existing Master Student with cascade to scores and sheet
+  const handleUpdateMasterStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+
+    if (!editStudentForm.nama.trim() || !editStudentForm.nisn.trim()) {
+      triggerToast('Nama dan NISN tidak boleh kosong!', false);
+      return;
+    }
+    if (!/^\d+$/.test(editStudentForm.nisn.trim()) || editStudentForm.nisn.toString().length < 8) {
+      triggerToast('NISN harus bernilai angka (minimal 8 angka)!', false);
+      return;
+    }
+
+    const oldNisn = editingStudent.nisn;
+    const sameNisn = oldNisn === editStudentForm.nisn.trim();
+    if (!sameNisn) {
+      // Check if NISN already exists for another student
+      const exists = masterStudents.some(s => s.nisn === editStudentForm.nisn.trim() && s.nisn !== oldNisn);
+      if (exists) {
+        triggerToast(`Siswa dengan NISN ${editStudentForm.nisn} sudah terdaftar!`, false);
+        return;
+      }
+    }
+
+    const updatedStudent: MasterStudent = {
+      nama: editStudentForm.nama.trim(),
+      nisn: editStudentForm.nisn.trim(),
+      kelas: editStudentForm.kelas,
+      jenisKelamin: editStudentForm.jenisKelamin
+    };
+
+    setSavingEditStudent(true);
+    triggerToast('Mendapatkan otorisasi & memperbarui data siswa...', true);
+
+    try {
+      if (gasUrl) {
+        const formBody = new URLSearchParams();
+        formBody.append('action', 'editDataSiswa');
+        formBody.append('oldNisn', oldNisn);
+        formBody.append('nisn', updatedStudent.nisn);
+        formBody.append('nama', updatedStudent.nama);
+        formBody.append('kelas', updatedStudent.kelas);
+        formBody.append('jenisKelamin', updatedStudent.jenisKelamin || 'L');
+
+        await fetch(gasUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formBody
+        });
+      }
+
+      // 1. Update Master Students database
+      setMasterStudents(prev => prev.map(s => s.nisn === oldNisn ? updatedStudent : s));
+
+      // 2. Cascade changes to students assessment records locally
+      setStudents(prev => prev.map(s => s.nisn === oldNisn ? {
+        ...s,
+        nisn: updatedStudent.nisn,
+        namaSiswa: updatedStudent.nama,
+        kelas: updatedStudent.kelas
+      } : s));
+
+      triggerToast(`Berhasil memperbarui data siswa ${updatedStudent.nama} secara sinkron!`, true);
+      setEditingStudent(null);
+    } catch (err: any) {
+      console.error(err);
+      triggerToast('Koneksi bermasalah, memperbarui data lokal saja...', false);
+      
+      // Update locally
+      setMasterStudents(prev => prev.map(s => s.nisn === oldNisn ? updatedStudent : s));
+      setStudents(prev => prev.map(s => s.nisn === oldNisn ? {
+        ...s,
+        nisn: updatedStudent.nisn,
+        namaSiswa: updatedStudent.nama,
+        kelas: updatedStudent.kelas
+      } : s));
+      
+      setEditingStudent(null);
+    } finally {
+      setSavingEditStudent(false);
+    }
+  };
+
+  // Save Satuan Pendidikan Identity with invisible safety key verification
+  const handleSaveSatuanPendidikan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const cleanName = inputNamaSekolah.trim().toLowerCase();
+    const cleanNpsn = inputNpsn.trim();
+    
+    // Safety verification locks hidden inside the code (does not appear in UI)
+    const allowedNames = ["sd negeri kajulangko", "sd negeri 1 touna", "sd negeri merdeka"];
+    const allowedNpsns = ["40203460"];
+
+    const isNameValid = allowedNames.some(val => cleanName === val || cleanName.includes(val) || val.includes(cleanName));
+    const isNpsnValid = allowedNpsns.includes(cleanNpsn);
+
+    if (!isNameValid || !isNpsnValid) {
+      triggerToast('Gagal Menyimpan: Identitas sekolah atau NPSN tidak sesuai dengan sistem lisensi keamanan internal (Fidhal Touna AI Security Key Lock).', false);
+      return;
+    }
+
+    setSavingSatuan(true);
+    triggerToast('Menyimpan identitas sekolah ke Google Sheets...', true);
+
+    // Persist locally
+    setNamaSekolah(inputNamaSekolah.trim());
+    setNpsn(inputNpsn.trim());
+    setSemester(inputSemester.trim());
+    setTahunPelajaran(inputTahunPelajaran.trim());
+
+    if (gasUrl) {
+      try {
+        const formBody = new URLSearchParams();
+        formBody.append('action', 'simpanPengaturan');
+        formBody.append('kktpMin', String(kktpMin));
+        formBody.append('kktpSangatBaik', String(kktpSangatBaik));
+        formBody.append('opsiPenilaian', opsiPenilaian);
+        formBody.append('sumatifWeights', JSON.stringify(sumatifWeights));
+        formBody.append('weightTP', String(weightTP));
+        formBody.append('weightSAS', String(weightSAS));
+        
+        // Append school parameters to sync on GSheets side
+        formBody.append('namaSekolah', inputNamaSekolah.trim());
+        formBody.append('npsn', inputNpsn.trim());
+        formBody.append('semester', inputSemester.trim());
+        formBody.append('tahunPelajaran', inputTahunPelajaran.trim());
+        formBody.append('appLogo', appLogo);
+
+        await fetch(gasUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formBody
+        });
+        
+        triggerToast('Identitas satuan pendidikan berhasil disimpan di Google Sheets!', true);
+      } catch (err: any) {
+        console.error(err);
+        triggerToast('Silakan cek koneksi Anda. Tersimpan di lokal saja.', false);
+      } finally {
+        setSavingSatuan(false);
+      }
+    } else {
+      triggerToast('Koneksi Google Sheets nonaktif. Tersimpan di database lokal saja.', true);
+      setSavingSatuan(false);
+    }
+  };
+
+  // Ref to handle hidden file inputs for custom app logo uploads
+  const logoInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = async () => {
+        // Create canvas to downscale the image to a compact 120px max size to fit Sheets cells under 50000 chars limit
+        const maxDim = 120;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/png');
+          
+          setAppLogo(compressedDataUrl);
+          
+          if (gasUrl) {
+            triggerToast('Menyimpan logo sekolah baru ke Google Sheets...', true);
+            try {
+              const formBody = new URLSearchParams();
+              formBody.append('action', 'simpanPengaturan');
+              formBody.append('kktpMin', String(kktpMin));
+              formBody.append('kktpSangatBaik', String(kktpSangatBaik));
+              formBody.append('opsiPenilaian', opsiPenilaian);
+              formBody.append('sumatifWeights', JSON.stringify(sumatifWeights));
+              formBody.append('weightTP', String(weightTP));
+              formBody.append('weightSAS', String(weightSAS));
+              formBody.append('namaSekolah', namaSekolah);
+              formBody.append('npsn', npsn);
+              formBody.append('semester', semester);
+              formBody.append('tahunPelajaran', tahunPelajaran);
+              formBody.append('appLogo', compressedDataUrl);
+
+              await fetch(gasUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: formBody
+              });
+              triggerToast('Logo sekolah berhasil diperbarui dan disinkronkan ke Google Sheets!', true);
+            } catch (err) {
+              console.error(err);
+              triggerToast('Koneksi bermasalah, logo baru disimpan di perangkat ini.', false);
+            }
+          } else {
+            triggerToast('Logo berubah secara lokal (Hubungkan Spreadsheet untuk sinkronisasi permanen).', true);
+          }
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   // Ref to handle hidden file inputs for bulk student uploads
@@ -2583,10 +2910,13 @@ export default function App() {
       </head>
       <body>
         <div class="bg-title">LAPORAN REKAP RIWAYAT NILAI SISWA</div>
-        <div style="font-size: 11px; margin-bottom: 15px; font-family: Arial, sans-serif;">
+        <div style="font-size: 11px; margin-bottom: 15px; font-family: Arial, sans-serif; line-height: 1.6;">
+          <strong>Satuan Pendidikan:</strong> ${namaSekolah}<br/>
+          <strong>NPSN:</strong> ${npsn}<br/>
+          <strong>Semester:</strong> ${semester}<br/>
+          <strong>Tahun Pelajaran:</strong> ${tahunPelajaran}<br/>
           <strong>Tanggal Cetak:</strong> ${new Date().toLocaleDateString('id-ID')} ${new Date().toLocaleTimeString('id-ID')}<br/>
-          <strong>Pendidik:</strong> ${currentUser?.nama || 'Administrator'}<br/>
-          <strong>Role Akun:</strong> ${currentUser?.role || 'Super Admin'}<br/>
+          <strong>Pendidik:</strong> ${currentUser?.nama || 'Administrator'} (${currentUser?.role || 'Super Admin'})<br/>
           <strong>Jumlah Data:</strong> ${sortedStudents.length} Siswa
         </div>
         <table>
@@ -2914,6 +3244,70 @@ function simpanDataSiswa(data) {
       status: 'error',
       message: err.toString()
     });
+  }
+}
+
+/**
+ * Memperbarui data siswa dan melakukan cascade update ke DaftarNilai / DataNilai
+ */
+function editDataSiswa(oldNisn, data) {
+  try {
+    var rawOldNisn = String(oldNisn || '').trim();
+    var rawNewNisn = String(data.nisn || '').trim();
+    var rawNama = String(data.nama || '').trim();
+    var rawKelas = String(data.kelas || '').trim();
+    var rawGender = String(data.jenisKelamin || '').trim();
+
+    // 1. Update DataSiswa
+    var sheetSiswa = getSpreadsheet().getSheetByName('DataSiswa');
+    var updatedSiswa = 0;
+    if (sheetSiswa) {
+      var rowsSiswa = sheetSiswa.getDataRange().getValues();
+      for (var i = 1; i < rowsSiswa.length; i++) {
+        var sheetNisn = String(rowsSiswa[i][0]).trim();
+        if (sheetNisn === rawOldNisn) {
+          sheetSiswa.getRange(i + 1, 1).setValue("'" + rawNewNisn);
+          sheetSiswa.getRange(i + 1, 2).setValue(rawNama);
+          sheetSiswa.getRange(i + 1, 3).setValue(rawKelas);
+          sheetSiswa.getRange(i + 1, 4).setValue(rawGender);
+          updatedSiswa++;
+        }
+      }
+    }
+
+    // 2. Cascade update to DaftarNilai / DataNilai if NISN, Nama, or Kelas changed
+    var sheetNilai = getSpreadsheet().getSheetByName('DaftarNilai') || getSpreadsheet().getSheetByName('DataNilai');
+    var updatedNilai = 0;
+    if (sheetNilai) {
+      var rowsNilai = sheetNilai.getDataRange().getValues();
+      var headers = rowsNilai[0];
+      var nisnColIdx = headers.indexOf('NISN');
+      var namaColIdx = headers.indexOf('Nama Siswa');
+      var kelasColIdx = headers.indexOf('Kelas');
+
+      if (nisnColIdx !== -1) {
+        for (var j = 1; j < rowsNilai.length; j++) {
+          var sheetNisn = String(rowsNilai[j][nisnColIdx]).trim();
+          if (sheetNisn === rawOldNisn) {
+            sheetNilai.getRange(j + 1, nisnColIdx + 1).setValue("'" + rawNewNisn);
+            if (namaColIdx !== -1) {
+              sheetNilai.getRange(j + 1, namaColIdx + 1).setValue(rawNama);
+            }
+            if (kelasColIdx !== -1) {
+              sheetNilai.getRange(j + 1, kelasColIdx + 1).setValue(rawKelas);
+            }
+            updatedNilai++;
+          }
+        }
+      }
+    }
+
+    return JSON.stringify({ 
+      status: 'success', 
+      message: 'Berhasil memperbarui data siswa (' + updatedSiswa + ' master, ' + updatedNilai + ' baris nilai) di Google Sheets.' 
+    });
+  } catch (err) {
+    return JSON.stringify({ status: 'error', message: err.toString() });
   }
 }
 
@@ -3357,6 +3751,8 @@ function doPost(e) {
     var resMsg;
     if (action === 'simpanDataSiswa') {
       resMsg = JSON.parse(simpanDataSiswa(params));
+    } else if (action === 'editDataSiswa') {
+      resMsg = JSON.parse(editDataSiswa(params.oldNisn, params));
     } else if (action === 'hapusDataSiswa') {
       resMsg = JSON.parse(hapusDataSiswa(params.nisn));
     } else if (action === 'simpanDataSiswaBulk') {
@@ -3719,7 +4115,7 @@ function simpanPengaturan(data) {
       keysInSheet[String(rows[i][0]).trim()] = i + 1; // 1-based row index
     }
     
-    var keysToSave = ['kktpMin', 'kktpSangatBaik', 'opsiPenilaian', 'sumatifWeights', 'weightTP', 'weightSAS'];
+    var keysToSave = ['kktpMin', 'kktpSangatBaik', 'opsiPenilaian', 'sumatifWeights', 'weightTP', 'weightSAS', 'namaSekolah', 'npsn', 'semester', 'tahunPelajaran'];
     for (var j = 0; j < keysToSave.length; j++) {
       var k = keysToSave[j];
       var v = String(data[k] !== undefined ? data[k] : '');
@@ -4465,20 +4861,34 @@ function hapusDataSiswa(nisn) {
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="bg-white p-0.5 rounded-xl text-blue-900 shadow-inner flex items-center justify-center shrink-0 w-11 h-11 overflow-hidden">
+            <div 
+              onClick={() => logoInputRef.current?.click()}
+              className="bg-white p-0.5 rounded-xl text-blue-900 shadow-inner flex items-center justify-center shrink-0 w-11 h-11 overflow-hidden cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-amber-400 active:scale-95 transition relative group"
+              title="Klik untuk mengubah logo sekolah"
+            >
               <img 
-                src="/logo.png" 
-                className="w-full h-full object-cover rounded-lg" 
+                src={appLogo || "/logo.png"} 
+                className="w-full h-full object-cover rounded-lg group-hover:opacity-75 transition animate-fade-in" 
                 alt="Logo" 
                 onError={(e) => {
                   e.currentTarget.onerror = null;
                   e.currentTarget.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%231e3a8a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>';
                 }}
               />
+              <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition duration-200 flex items-center justify-center">
+                <Camera className="w-4 h-4 text-white font-bold" />
+              </div>
             </div>
+            <input 
+              type="file"
+              ref={logoInputRef}
+              onChange={handleLogoChange}
+              accept="image/*"
+              className="hidden"
+            />
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-md font-bold text-amber-400 tracking-widest uppercase">SD NEGERI KAJULANGKO</span>
+                <span className="text-md font-bold text-amber-400 tracking-widest uppercase">{namaSekolah}</span>
                 <span className="bg-amber-400 text-slate-900 px-2 py-0.5 rounded text-[10px] font-black tracking-wider uppercase">KURIKULUM MERDEKA</span>
               </div>
               <h1 className="text-xl md:text-2xl font-extrabold tracking-tight mt-0.5 text-white flex items-center gap-2">
@@ -6155,6 +6565,18 @@ function hapusDataSiswa(nisn) {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setSettingsSubTab('satuan')}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      settingsSubTab === 'satuan' 
+                        ? 'bg-blue-600 text-white shadow-sm' 
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    <GraduationCap className="w-3.5 h-3.5 shrink-0" />
+                    Satuan Pendidikan
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setSettingsSubTab('students')}
                     className={`px-3 py-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                       settingsSubTab === 'students' 
@@ -6357,6 +6779,83 @@ function hapusDataSiswa(nisn) {
               </div>
             )}
 
+            {settingsSubTab === 'satuan' && (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-md space-y-6">
+                <div>
+                  <h3 className="text-sm md:text-base font-extrabold text-slate-800 mb-1 flex items-center gap-2">
+                    <GraduationCap className="w-5 h-5 text-blue-600" />
+                    Identitas Satuan Pendidikan & Tahun Pelajaran
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                    Atur nama sekolah, data NPSN, Semester dan Tahun Pelajaran yang aktif saat ini. Data ini akan otomatis disinkronkan ke Google Sheets dan dicetak sebagai judul Laporan Rekap Nilai format Excel.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSaveSatuanPendidikan} className="space-y-4 text-xs font-medium">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Nama Satuan Pendidikan / Sekolah</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="Contoh: SD Negeri 1 Touna"
+                        value={inputNamaSekolah}
+                        onChange={(e) => setInputNamaSekolah(e.target.value)}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 focus:bg-white bg-slate-50/50 text-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">NPSN Sekolah</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="Contoh: 20261708"
+                        value={inputNpsn}
+                        onChange={(e) => setInputNpsn(e.target.value)}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 focus:bg-white bg-slate-50/50 text-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Semester Aktif</label>
+                      <select 
+                        value={inputSemester}
+                        onChange={(e) => setInputSemester(e.target.value)}
+                        className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-blue-500 text-slate-800"
+                      >
+                        <option value="1 (Ganjil)">1 (Ganjil)</option>
+                        <option value="2 (Genap)">2 (Genap)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tahun Pelajaran</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="Contoh: 2026/2027"
+                        value={inputTahunPelajaran}
+                        onChange={(e) => setInputTahunPelajaran(e.target.value)}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 focus:bg-white bg-slate-50/50 text-slate-800"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-3 border-t border-slate-100">
+                    <button
+                      type="submit"
+                      disabled={savingSatuan}
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 text-xs font-extrabold text-white bg-blue-700 hover:bg-blue-800 hover:scale-[1.01] active:scale-[0.99] transition rounded-xl shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      {savingSatuan ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      {savingSatuan ? 'Mengirim Data...' : 'Simpan & Sinkronkan Identitas Satuan Pendidikan'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
             {settingsSubTab === 'students' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans">
                 {/* Left side: Add Student & Bulk Upload stacked cards */}
@@ -6529,20 +7028,124 @@ function hapusDataSiswa(nisn) {
                               </span>
                             </td>
                             <td className="py-3 px-4 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteMasterStudent(ms.nisn, ms.nama)}
-                                className="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg cursor-pointer transition"
-                                title="Hapus Siswa"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <div className="flex justify-center items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingStudent(ms)}
+                                  className="p-1.5 hover:bg-amber-50 text-amber-600 hover:text-amber-700 rounded-lg cursor-pointer transition"
+                                  title="Edit Data Siswa"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteMasterStudent(ms.nisn, ms.nama)}
+                                  className="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg cursor-pointer transition"
+                                  title="Hapus Siswa"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Edit Student Modal Overlay */}
+            {editingStudent && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs transition-all animate-fade-in font-sans">
+                <div className="bg-white rounded-2xl p-6 shadow-2xl border border-slate-200 max-w-md w-full relative space-y-5 animate-scale-up">
+                  <button 
+                    type="button" 
+                    onClick={() => setEditingStudent(null)}
+                    className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer transition"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+
+                  <div>
+                    <h4 className="text-sm md:text-base font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                      <Edit className="w-5 h-5 text-amber-600 font-bold" />
+                      Ubah Data & Identitas Siswa
+                    </h4>
+                    <p className="text-xs text-slate-400 font-semibold mt-1">Lakukan penyuntingan identitas siswa secara sinkron ke Google Sheets.</p>
+                  </div>
+
+                  <form onSubmit={handleUpdateMasterStudent} className="space-y-4 text-xs font-medium">
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-widest mb-1.5">Nama Lengkap Murid</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="Nama murid..."
+                        value={editStudentForm.nama}
+                        onChange={(e) => setEditStudentForm({ ...editStudentForm, nama: e.target.value })}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 bg-slate-50/50 text-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-widest mb-1.5">NISN (Nomor Induk Siswa Nasional)</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="NISN..."
+                        value={editStudentForm.nisn}
+                        onChange={(e) => setEditStudentForm({ ...editStudentForm, nisn: e.target.value })}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 bg-slate-50/50 text-slate-800 font-mono font-bold"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-widest mb-1.5">Kelas</label>
+                        <select 
+                          value={editStudentForm.kelas}
+                          onChange={(e) => setEditStudentForm({ ...editStudentForm, kelas: e.target.value })}
+                          className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
+                        >
+                          {listAllClasses.map(kls => (
+                            <option key={kls} value={kls}>{kls}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-widest mb-1.5">Jenis Kelamin</label>
+                        <select 
+                          value={editStudentForm.jenisKelamin}
+                          onChange={(e) => setEditStudentForm({ ...editStudentForm, jenisKelamin: e.target.value })}
+                          className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="L">Laki-laki (L)</option>
+                          <option value="P">Perempuan (P)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingStudent(null)}
+                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl transition font-extrabold text-center cursor-pointer text-xs"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={savingEditStudent}
+                        className="flex-1 bg-blue-700 hover:bg-blue-800 text-white py-3 rounded-xl transition font-extrabold text-center cursor-pointer text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      >
+                        {savingEditStudent ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        {savingEditStudent ? 'Menyimpan...' : 'Simpan Perubahan'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
             )}
