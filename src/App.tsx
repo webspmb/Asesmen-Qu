@@ -5214,10 +5214,10 @@ function hapusDataSiswa(nisn) {
 
         {/* Tab 1: Simulator Form Input */}
         {activeTab === 'simulator' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="space-y-8">
             
-            {/* Sisi Kiri: Form Input Score */}
-            <form onSubmit={handleSubmitLocal} className="lg:col-span-7 bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+            {/* Form Input Score - Full Width */}
+            <form onSubmit={handleSubmitLocal} className="w-full bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
               <div className="bg-slate-100/80 border-b border-indigo-100 px-6 py-4 flex items-center justify-between">
                 <h2 className="text-sm md:text-base font-extrabold text-blue-950 flex items-center gap-2">
                   <span className="w-3 h-3 bg-blue-700 rounded-full"></span>
@@ -5559,8 +5559,8 @@ function hapusDataSiswa(nisn) {
               </div>
             </form>
 
-            {/* Sisi Kanan: Panduan Regulasi Kemendikbud */}
-            <div className="lg:col-span-5 space-y-6">
+            {/* Sisi Bawah: Aturan Formulasi Deskripsi & Mata Pelajaran Aktif sejajar */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
               
               <div className="bg-white rounded-2xl p-6 shadow-md border border-slate-200">
                 <h3 className="text-sm font-extrabold text-blue-950 flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
@@ -5600,7 +5600,7 @@ function hapusDataSiswa(nisn) {
                 </div>
               </div>
 
-              {/* Quick Info Box */}
+              {/* Quick Info Box / Mata Pelajaran Aktif */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-indigo-100 flex gap-4 text-xs font-semibold text-indigo-950">
                 <BookOpen className="w-10 h-10 text-indigo-600 shrink-0" />
                 <div>
@@ -6857,7 +6857,7 @@ function hapusDataSiswa(nisn) {
             )}
 
             {settingsSubTab === 'students' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch font-sans">
                 {/* Left side: Add Student & Bulk Upload stacked cards */}
                 <div className="lg:col-span-4 space-y-6">
                   {/* Card 1: Add Student form */}
@@ -6986,7 +6986,7 @@ function hapusDataSiswa(nisn) {
                 </div>
 
                 {/* Right side: Student List Table */}
-                <div className="lg:col-span-8 bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+                <div className="lg:col-span-8 bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden flex flex-col h-full">
                   <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                     <div>
                       <h4 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider">Identitas Seluruh Master Siswa</h4>
@@ -7003,7 +7003,7 @@ function hapusDataSiswa(nisn) {
                     </button>
                   </div>
 
-                  <div className="overflow-y-auto max-h-[460px]">
+                  <div className="overflow-y-auto flex-1 max-h-[710px]">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="bg-slate-100/50 text-slate-500 font-extrabold uppercase border-b border-slate-100">
