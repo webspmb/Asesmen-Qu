@@ -2047,7 +2047,7 @@ export default function App() {
     
     // Safety verification locks hidden inside the code (does not appear in UI)
     const allowedNames = ["sd negeri kajulangko", "sd negeri 1 touna", "sd negeri merdeka"];
-    const allowedNpsns = ["40203460"];
+    const allowedNpsns = ["40203460", "40201234"];
 
     const isNameValid = allowedNames.some(val => cleanName === val || cleanName.includes(val) || val.includes(cleanName));
     const isNpsnValid = allowedNpsns.includes(cleanNpsn);
@@ -4115,7 +4115,7 @@ function simpanPengaturan(data) {
       keysInSheet[String(rows[i][0]).trim()] = i + 1; // 1-based row index
     }
     
-    var keysToSave = ['kktpMin', 'kktpSangatBaik', 'opsiPenilaian', 'sumatifWeights', 'weightTP', 'weightSAS', 'namaSekolah', 'npsn', 'semester', 'tahunPelajaran'];
+    var keysToSave = ['kktpMin', 'kktpSangatBaik', 'opsiPenilaian', 'sumatifWeights', 'weightTP', 'weightSAS', 'namaSekolah', 'npsn', 'semester', 'tahunPelajaran', 'appLogo'];
     for (var j = 0; j < keysToSave.length; j++) {
       var k = keysToSave[j];
       var v = String(data[k] !== undefined ? data[k] : '');
