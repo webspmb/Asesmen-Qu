@@ -449,6 +449,9 @@ export default function App() {
     localStorage.setItem('erapor_master_students', JSON.stringify(masterStudents));
   }, [masterStudents]);
 
+  // Search query for Identitas Seluruh Master Siswa
+  const [masterSearchQuery, setMasterSearchQuery] = useState('');
+
   // TP Descriptions State - Defaults to DEFAULT_PRESET_TPS
   const [tpConfigs, setTpConfigs] = useState<TPDescription[]>(() => {
     const saved = localStorage.getItem('erapor_tp_configs');
@@ -5875,11 +5878,9 @@ function hapusDataSiswa(nisn) {
                         {/* Row 2 Header */}
                         <tr className="bg-slate-50 text-slate-650 font-bold text-[9px] uppercase tracking-wider text-center border-b border-slate-300">
                           {activeMaxSumatifCount > 0 && Array.from({ length: activeMaxSumatifCount }).map((_, sIdx) => {
-                            const alphabetCode = String.fromCharCode(65 + (sIdx % 26));
                             return (
                               <th key={sIdx} className="py-2 px-1 border border-slate-300 bg-rose-50/45 w-10 text-rose-900 font-black">
                                 S{sIdx + 1}
-                                <span className="block text-[8px] font-normal text-slate-400 font-sans">{alphabetCode}</span>
                               </th>
                             );
                           })}
@@ -7003,6 +7004,32 @@ function hapusDataSiswa(nisn) {
                     </button>
                   </div>
 
+                  {/* Search Bar Row */}
+                  <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <Search className="w-4 h-4 text-slate-400" />
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Cari siswa berdasarkan nama, NISN, atau kelas..."
+                        value={masterSearchQuery}
+                        onChange={(e) => setMasterSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-8 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium text-slate-700 bg-white shadow-sm transition font-sans"
+                      />
+                      {masterSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setMasterSearchQuery('')}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                          title="Bersihkan Pencarian"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="overflow-y-auto flex-1 max-h-[710px]">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
@@ -7015,40 +7042,64 @@ function hapusDataSiswa(nisn) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
-                        {masterStudents.map((ms) => (
-                          <tr key={ms.nisn} className="hover:bg-slate-50/50 transition">
-                            <td className="py-3 px-4 font-bold text-slate-900">{ms.nama}</td>
-                            <td className="py-3 px-4 font-mono text-slate-600">{ms.nisn}</td>
-                            <td className="py-3 px-4">
-                              <span className="bg-slate-100 text-slate-700 font-bold px-2.5 py-0.5 rounded text-[10px]">{ms.kelas}</span>
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-black ${ms.jenisKelamin === 'P' ? 'bg-pink-50 text-pink-700 border border-pink-100' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
-                                {ms.jenisKelamin || 'L'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              <div className="flex justify-center items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingStudent(ms)}
-                                  className="p-1.5 hover:bg-amber-50 text-amber-600 hover:text-amber-700 rounded-lg cursor-pointer transition"
-                                  title="Edit Data Siswa"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteMasterStudent(ms.nisn, ms.nama)}
-                                  className="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg cursor-pointer transition"
-                                  title="Hapus Siswa"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                        {(() => {
+                          const filtered = masterStudents.filter((ms) => {
+                            if (!masterSearchQuery.trim()) return true;
+                            const query = masterSearchQuery.toLowerCase();
+                            return (
+                              ms.nama.toLowerCase().includes(query) ||
+                              ms.nisn.toLowerCase().includes(query) ||
+                              (ms.kelas || '').toLowerCase().includes(query)
+                            );
+                          });
+
+                          if (filtered.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={5} className="py-12 text-center text-slate-400 font-sans">
+                                  <Search className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                                  <p className="text-xs font-bold text-slate-500">Tidak ada siswa yang cocok</p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">Coba cari dengan kata kunci lain.</p>
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          return filtered.map((ms) => (
+                            <tr key={ms.nisn} className="hover:bg-slate-50/50 transition">
+                              <td className="py-3 px-4 font-bold text-slate-900">{ms.nama}</td>
+                              <td className="py-3 px-4 font-mono text-slate-600">{ms.nisn}</td>
+                              <td className="py-3 px-4">
+                                <span className="bg-slate-100 text-slate-700 font-bold px-2.5 py-0.5 rounded text-[10px]">{ms.kelas}</span>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${ms.jenisKelamin === 'P' ? 'bg-pink-50 text-pink-700 border border-pink-100' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
+                                  {ms.jenisKelamin || 'L'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <div className="flex justify-center items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingStudent(ms)}
+                                    className="p-1.5 hover:bg-amber-50 text-amber-600 hover:text-amber-700 rounded-lg cursor-pointer transition"
+                                    title="Edit Data Siswa"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteMasterStudent(ms.nisn, ms.nama)}
+                                    className="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg cursor-pointer transition"
+                                    title="Hapus Siswa"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ));
+                        })()}
                       </tbody>
                     </table>
                   </div>
